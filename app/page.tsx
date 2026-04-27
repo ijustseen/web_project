@@ -127,6 +127,7 @@ export default function Home() {
   const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const playerIdRef = useRef<string>("");
   const dragRef = useRef<{ x: number; y: number } | null>(null);
+  const touchDragRef = useRef<{ x: number; y: number } | null>(null);
   const dragMovedRef = useRef(false);
 
   const [board, setBoard] = useState<string[]>(() =>
@@ -543,6 +544,46 @@ export default function Home() {
     setIsDragging(false);
   };
 
+  const handleTouchStart = (event: React.TouchEvent<HTMLCanvasElement>) => {
+    if (event.touches.length !== 1) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    touchDragRef.current = { x: touch.clientX, y: touch.clientY };
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (event: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!touchDragRef.current || event.touches.length !== 1) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const touch = event.touches[0];
+    const rect = event.currentTarget.getBoundingClientRect();
+    const scale = CANVAS_VIEW_SIZE / rect.width;
+
+    const deltaX = (touch.clientX - touchDragRef.current.x) * scale;
+    const deltaY = (touch.clientY - touchDragRef.current.y) * scale;
+
+    touchDragRef.current = { x: touch.clientX, y: touch.clientY };
+
+    setViewState((previous) =>
+      clampViewState({
+        ...previous,
+        panX: previous.panX + deltaX,
+        panY: previous.panY + deltaY,
+      }),
+    );
+  };
+
+  const handleTouchEnd = () => {
+    touchDragRef.current = null;
+    setIsDragging(false);
+  };
+
   const handleCanvasLeave = () => {
     handleDragEnd();
     setHoveredCell(null);
@@ -611,10 +652,29 @@ export default function Home() {
           </section>
 
           <section className={`${styles.sectionCard} ${styles.selectionCard}`}>
-            <h2>Selection</h2>
-            <span className={styles.liveBadge} data-state={realtimeStatus}>
-              Live: {realtimeStatus}
-            </span>
+            <div className={styles.selectionHeader}>
+              <h2>Selection</h2>
+              <span className={styles.liveBadge} data-state={realtimeStatus}>
+                {realtimeStatus}
+              </span>
+            </div>
+            <div className={styles.mobilePalette}>
+              {PIXEL_PALETTE.map((color) => {
+                const isSelected = color === selectedColor;
+
+                return (
+                  <button
+                    key={`mobile-${color}`}
+                    type="button"
+                    className={styles.paletteSwatch}
+                    style={{ backgroundColor: color }}
+                    data-selected={isSelected}
+                    onClick={() => setSelectedColor(color)}
+                    aria-label={`Select color ${color}`}
+                  />
+                );
+              })}
+            </div>
             <p>
               {selectedCell
                 ? `X: ${selectedCell.x}, Y: ${selectedCell.y}`
@@ -661,6 +721,10 @@ export default function Home() {
             onMouseMove={handleDragMove}
             onMouseUp={handleDragEnd}
             onMouseLeave={handleCanvasLeave}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
             aria-label="Pixel battle board"
             role="img"
           />
