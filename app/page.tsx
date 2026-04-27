@@ -621,15 +621,15 @@ export default function Home() {
 
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <h1>
-          Pixel Battle {BOARD_SIZE}x{BOARD_SIZE}
-        </h1>
-        <p>Global board, one pixel every 10 seconds.</p>
-      </header>
-
       <main className={styles.main}>
         <aside className={styles.sidebar}>
+          <section className={`${styles.sectionCard} ${styles.infoCard}`}>
+            <h1>
+              Pixel Battle {BOARD_SIZE}x{BOARD_SIZE}
+            </h1>
+            <p>Global board, one pixel every 5 seconds.</p>
+          </section>
+
           <section className={`${styles.sectionCard} ${styles.paletteCard}`}>
             <h2>Palette</h2>
             <div className={styles.paletteGrid}>

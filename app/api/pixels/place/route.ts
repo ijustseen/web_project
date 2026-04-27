@@ -6,8 +6,8 @@ import {
 } from "@/services/pixel/player-id";
 import { logPlacementEvent } from "@/services/pixel/logging";
 import { checkPlacementRateLimit } from "@/services/pixel/rate-limit";
-import { broadcastRealtimeEvent } from "@/services/pixel/realtime";
-import { applyPlacement } from "@/services/pixel/store";
+import { publishRealtimeEvent } from "@/services/pixel/realtime";
+import { applyPlacementShared } from "@/services/pixel/store-shared";
 import {
   validateColor,
   validateCoordinates,
@@ -117,7 +117,7 @@ export async function POST(request: Request) {
     return NextResponse.json(color, { status: 400 });
   }
 
-  const result = applyPlacement({
+  const result = await applyPlacementShared({
     playerId,
     x: coordinates.value.x,
     y: coordinates.value.y,
@@ -171,7 +171,7 @@ export async function POST(request: Request) {
     details: `next available at ${result.nextAvailableAt}`,
   });
 
-  broadcastRealtimeEvent({
+  await publishRealtimeEvent({
     type: "placed",
     x: coordinates.value.x,
     y: coordinates.value.y,

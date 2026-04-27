@@ -4,26 +4,9 @@
   font-family: var(--font-geist-sans);
   color: #e6edf3;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   background: #0b0f14;
-}
-
-.header {
-  max-width: 1280px;
-  width: 100%;
-  margin: 0 auto;
-}
-
-.header h1 {
-  font-size: 32px;
-  letter-spacing: -0.03em;
-}
-
-.header p {
-  margin-top: 2px;
-  color: #98a9bd;
 }
 
 .liveBadge {
@@ -91,6 +74,16 @@
   border-radius: 16px;
   border: 1px solid #253243;
   background: #121922;
+}
+
+.infoCard h1 {
+  font-size: 28px;
+  letter-spacing: -0.03em;
+  margin-bottom: 4px;
+}
+
+.infoCard p {
+  color: #98a9bd;
 }
 
 .sectionCard h2 {
@@ -217,8 +210,8 @@
     order: 2;
   }
 
-  .header h1 {
-    font-size: 26px;
+  .infoCard h1 {
+    font-size: 24px;
   }
 
   .boardCanvas {
@@ -232,7 +225,7 @@
     padding-bottom: 214px;
   }
 
-  .header p {
+  .infoCard p {
     font-size: 14px;
   }
 

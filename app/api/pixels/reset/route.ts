@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { broadcastRealtimeEvent } from "@/services/pixel/realtime";
-import { resetBoardToWhite } from "@/services/pixel/store";
+import { publishRealtimeEvent } from "@/services/pixel/realtime";
+import { resetBoardToWhiteShared } from "@/services/pixel/store-shared";
 
 export async function POST() {
-  resetBoardToWhite();
-  broadcastRealtimeEvent({ type: "reset" });
+  await resetBoardToWhiteShared();
+  await publishRealtimeEvent({ type: "reset" });
 
   return NextResponse.json(
     {

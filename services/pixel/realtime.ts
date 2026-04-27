@@ -1,4 +1,5 @@
 import type { PixelColor } from "../../types/pixel";
+import { getRedisClient, getRedisSubscriber, isRedisConfigured } from "./redis";
 
 type RealtimeEvent =
   | { type: "ready" }
@@ -6,8 +7,11 @@ type RealtimeEvent =
   | { type: "reset" }
   | { type: "heartbeat" };
 
+const REDIS_REALTIME_CHANNEL = "pixel:battle:events";
+
 const encoder = new TextEncoder();
 const clients = new Map<string, ReadableStreamDefaultController<Uint8Array>>();
+let subscriptionInitialized = false;
 
 function encodeEvent(event: RealtimeEvent): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify(event)}\n\n`);
@@ -17,6 +21,7 @@ export function registerRealtimeClient(
   clientId: string,
   controller: ReadableStreamDefaultController<Uint8Array>,
 ): void {
+  initializeRedisSubscription();
   clients.set(clientId, controller);
   controller.enqueue(encodeEvent({ type: "ready" }));
 }
@@ -38,7 +43,25 @@ export function sendRealtimeHeartbeat(clientId: string): void {
   }
 }
 
-export function broadcastRealtimeEvent(
+export async function publishRealtimeEvent(
+  event: Exclude<RealtimeEvent, { type: "ready" }>,
+): Promise<void> {
+  initializeRedisSubscription();
+
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      await redis.publish(REDIS_REALTIME_CHANNEL, JSON.stringify(event));
+      return;
+    } catch {
+      // If Redis publish fails, fallback to local process broadcast.
+    }
+  }
+
+  broadcastLocalEvent(event);
+}
+
+function broadcastLocalEvent(
   event: Exclude<RealtimeEvent, { type: "ready" }>,
 ): void {
   const payload = encodeEvent(event);
@@ -50,4 +73,44 @@ export function broadcastRealtimeEvent(
       clients.delete(clientId);
     }
   }
+}
+
+function initializeRedisSubscription(): void {
+  if (!isRedisConfigured() || subscriptionInitialized) {
+    return;
+  }
+
+  const subscriber = getRedisSubscriber();
+  if (!subscriber) {
+    return;
+  }
+
+  subscriptionInitialized = true;
+
+  subscriber.subscribe(REDIS_REALTIME_CHANNEL).catch(() => {
+    subscriptionInitialized = false;
+  });
+
+  subscriber.on("message", (channel, message) => {
+    if (channel !== REDIS_REALTIME_CHANNEL) {
+      return;
+    }
+
+    let event: unknown;
+    try {
+      event = JSON.parse(message);
+    } catch {
+      return;
+    }
+
+    if (
+      typeof event === "object" &&
+      event !== null &&
+      "type" in event &&
+      typeof event.type === "string" &&
+      event.type !== "ready"
+    ) {
+      broadcastLocalEvent(event as Exclude<RealtimeEvent, { type: "ready" }>);
+    }
+  });
 }
