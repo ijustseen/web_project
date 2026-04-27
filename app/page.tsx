@@ -180,29 +180,36 @@ export default function Home() {
     setBoard(nextBoard);
   }, []);
 
-  const loadBoard = useCallback(async () => {
-    try {
-      const response = await fetch("/api/pixels/board", {
-        cache: "no-store",
-      });
+  const loadBoard = useCallback(
+    async (silent: boolean = false) => {
+      try {
+        const response = await fetch("/api/pixels/board", {
+          cache: "no-store",
+        });
 
-      if (!response.ok) {
-        throw new Error("Unable to load board");
+        if (!response.ok) {
+          throw new Error("Unable to load board");
+        }
+
+        const payload: unknown = await response.json();
+        if (!isRecord(payload) || !Array.isArray(payload.pixels)) {
+          throw new Error("Invalid board payload");
+        }
+
+        updateBoard(payload.pixels);
+        if (!silent) {
+          setStatusMessage("Board synchronized.");
+        }
+      } catch {
+        if (!silent) {
+          setStatusMessage("Board loading failed. Try again.");
+        }
+      } finally {
+        setIsLoadingBoard(false);
       }
-
-      const payload: unknown = await response.json();
-      if (!isRecord(payload) || !Array.isArray(payload.pixels)) {
-        throw new Error("Invalid board payload");
-      }
-
-      updateBoard(payload.pixels);
-      setStatusMessage("Board synchronized.");
-    } catch {
-      setStatusMessage("Board loading failed. Try again.");
-    } finally {
-      setIsLoadingBoard(false);
-    }
-  }, [updateBoard]);
+    },
+    [updateBoard],
+  );
 
   const disablePlaceAction = useMemo(
     () =>
@@ -219,11 +226,21 @@ export default function Home() {
     playerIdRef.current = getOrCreatePlayerId();
 
     const timerId = window.setTimeout(() => {
-      void loadBoard();
+      void loadBoard(false);
     }, 0);
 
     return () => {
       window.clearTimeout(timerId);
+    };
+  }, [loadBoard]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void loadBoard(true);
+    }, 1500);
+
+    return () => {
+      window.clearInterval(timer);
     };
   }, [loadBoard]);
 
@@ -251,7 +268,7 @@ export default function Home() {
 
     eventSource.onopen = () => {
       setRealtimeStatus("connected");
-      void loadBoard();
+      void loadBoard(true);
     };
 
     eventSource.onmessage = (event) => {
