@@ -14,7 +14,8 @@ function createRedisConnection(): RedisWithEvents | null {
   }
 
   return new Redis(redisUrl, {
-    maxRetriesPerRequest: 3,
+    // Keep reconnecting for long-lived realtime/pub-sub workflows.
+    maxRetriesPerRequest: null,
     enableOfflineQueue: true,
   });
 }

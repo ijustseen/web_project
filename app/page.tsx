@@ -251,6 +251,7 @@ export default function Home() {
 
     eventSource.onopen = () => {
       setRealtimeStatus("connected");
+      void loadBoard();
     };
 
     eventSource.onmessage = (event) => {
@@ -303,7 +304,7 @@ export default function Home() {
     return () => {
       eventSource.close();
     };
-  }, []);
+  }, [loadBoard]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

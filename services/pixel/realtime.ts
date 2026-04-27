@@ -12,6 +12,7 @@ const REDIS_REALTIME_CHANNEL = "pixel:battle:events";
 const encoder = new TextEncoder();
 const clients = new Map<string, ReadableStreamDefaultController<Uint8Array>>();
 let subscriptionInitialized = false;
+let redisListenersBound = false;
 
 function encodeEvent(event: RealtimeEvent): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify(event)}\n\n`);
@@ -21,7 +22,7 @@ export function registerRealtimeClient(
   clientId: string,
   controller: ReadableStreamDefaultController<Uint8Array>,
 ): void {
-  initializeRedisSubscription();
+  void initializeRedisSubscription();
   clients.set(clientId, controller);
   controller.enqueue(encodeEvent({ type: "ready" }));
 }
@@ -31,6 +32,8 @@ export function unregisterRealtimeClient(clientId: string): void {
 }
 
 export function sendRealtimeHeartbeat(clientId: string): void {
+  void initializeRedisSubscription();
+
   const controller = clients.get(clientId);
   if (!controller) {
     return;
@@ -46,7 +49,7 @@ export function sendRealtimeHeartbeat(clientId: string): void {
 export async function publishRealtimeEvent(
   event: Exclude<RealtimeEvent, { type: "ready" }>,
 ): Promise<void> {
-  initializeRedisSubscription();
+  await initializeRedisSubscription();
 
   const redis = getRedisClient();
   if (redis) {
@@ -75,8 +78,8 @@ function broadcastLocalEvent(
   }
 }
 
-function initializeRedisSubscription(): void {
-  if (!isRedisConfigured() || subscriptionInitialized) {
+async function initializeRedisSubscription(): Promise<void> {
+  if (!isRedisConfigured()) {
     return;
   }
 
@@ -85,9 +88,32 @@ function initializeRedisSubscription(): void {
     return;
   }
 
-  subscriptionInitialized = true;
+  bindRedisSubscriberListeners(subscriber);
+  await subscribeToRealtimeChannel(subscriber);
+}
 
-  subscriber.subscribe(REDIS_REALTIME_CHANNEL).catch(() => {
+function bindRedisSubscriberListeners(
+  subscriber: NonNullable<ReturnType<typeof getRedisSubscriber>>,
+): void {
+  if (redisListenersBound) {
+    return;
+  }
+
+  redisListenersBound = true;
+
+  subscriber.on("ready", () => {
+    void subscribeToRealtimeChannel(subscriber);
+  });
+
+  subscriber.on("close", () => {
+    subscriptionInitialized = false;
+  });
+
+  subscriber.on("end", () => {
+    subscriptionInitialized = false;
+  });
+
+  subscriber.on("reconnecting", () => {
     subscriptionInitialized = false;
   });
 
@@ -113,4 +139,19 @@ function initializeRedisSubscription(): void {
       broadcastLocalEvent(event as Exclude<RealtimeEvent, { type: "ready" }>);
     }
   });
+}
+
+async function subscribeToRealtimeChannel(
+  subscriber: NonNullable<ReturnType<typeof getRedisSubscriber>>,
+): Promise<void> {
+  if (subscriptionInitialized) {
+    return;
+  }
+
+  try {
+    await subscriber.subscribe(REDIS_REALTIME_CHANNEL);
+    subscriptionInitialized = true;
+  } catch {
+    subscriptionInitialized = false;
+  }
 }
