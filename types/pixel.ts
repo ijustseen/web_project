@@ -1,6 +1,6 @@
 export const PIXEL_PALETTE = [
   "#111111",
-  "#f8fafc",
+  "#ffffff",
   "#ef4444",
   "#3b82f6",
   "#22c55e",
