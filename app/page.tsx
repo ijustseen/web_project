@@ -743,7 +743,10 @@ export default function Home() {
                 ? `X: ${selectedCell.x}, Y: ${selectedCell.y}`
                 : "Click board to choose a cell"}
             </p>
-            <p>Cooldown: {cooldownRemaining}s</p>
+            <p>
+              Cooldown:{" "}
+              {cooldownRemaining > 0 ? `${cooldownRemaining}s` : "Ready"}
+            </p>
             <button
               type="button"
               className={styles.placeButton}
