@@ -7,11 +7,20 @@ export type ValidationResult<T> =
   | { ok: true; value: T }
   | { ok: false; code: ValidationErrorCode; message: string };
 
+function isPixelColor(value: string): value is PixelColor {
+  return PIXEL_PALETTE.includes(value as PixelColor);
+}
+
 export function validateCoordinates(
   x: unknown,
   y: unknown,
 ): ValidationResult<{ x: number; y: number }> {
-  if (!Number.isInteger(x) || !Number.isInteger(y)) {
+  if (
+    typeof x !== "number" ||
+    typeof y !== "number" ||
+    !Number.isInteger(x) ||
+    !Number.isInteger(y)
+  ) {
     return {
       ok: false,
       code: "VALIDATION_COORDINATE",
@@ -42,7 +51,7 @@ export function validateColor(color: unknown): ValidationResult<PixelColor> {
     };
   }
 
-  if (!PIXEL_PALETTE.includes(color as PixelColor)) {
+  if (!isPixelColor(color)) {
     return {
       ok: false,
       code: "VALIDATION_COLOR",
