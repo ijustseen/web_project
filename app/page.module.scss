@@ -1,0 +1,264 @@
+.page {
+  height: 100dvh;
+  padding: 16px;
+  font-family: var(--font-geist-sans);
+  color: #e6edf3;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  overflow: hidden;
+  background: #0b0f14;
+}
+
+.header {
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.header h1 {
+  font-size: 32px;
+  letter-spacing: -0.03em;
+}
+
+.header p {
+  margin-top: 2px;
+  color: #98a9bd;
+}
+
+.liveBadge {
+  display: inline-flex;
+  margin-bottom: 8px;
+  align-self: flex-start;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #2b384a;
+  background: #111823;
+  color: #9bb0c6;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.liveBadge[data-state="connected"] {
+  border-color: #245f4a;
+  background: #10261e;
+  color: #6ce2b3;
+}
+
+.liveBadge[data-state="disconnected"] {
+  border-color: #60343a;
+  background: #2a1619;
+  color: #f2939c;
+}
+
+.main {
+  min-height: 0;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 320px minmax(0, 1fr);
+}
+
+.sidebar {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.sectionCard {
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid #253243;
+  background: #121922;
+}
+
+.sectionCard h2 {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.paletteGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.paletteSwatch {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.paletteSwatch[data-selected="true"] {
+  border-color: #0f172a;
+  transform: translateY(-2px);
+}
+
+.placeButton {
+  margin-top: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #334b67;
+  border-radius: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #e7edf5;
+  background: #183249;
+  cursor: pointer;
+}
+
+.placeButton:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.statusMessage {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #93a9bf;
+}
+
+.boardSection {
+  min-height: 0;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-radius: 16px;
+  border: 1px solid #253243;
+  background: #121922;
+}
+
+.zoomSliderWrap {
+  display: grid;
+  gap: 4px;
+}
+
+.zoomSliderWrap label {
+  font-size: 12px;
+  color: #9ab1c8;
+}
+
+.zoomSliderWrap input {
+  width: 100%;
+}
+
+.boardCanvas {
+  width: min(100%, 72dvh);
+  max-height: min(100%, 72dvh);
+  aspect-ratio: 1 / 1;
+  height: auto;
+  display: block;
+  border-radius: 14px;
+  border: 2px solid #2e4159;
+  background: #ffffff;
+  image-rendering: pixelated;
+  cursor: grab;
+  touch-action: none;
+  margin: 0 auto;
+}
+
+.boardCanvas.dragging {
+  cursor: grabbing;
+}
+
+.boardHint {
+  margin-top: auto;
+  text-align: center;
+  color: #95abc1;
+  font-size: 13px;
+}
+
+@media (max-width: 980px) {
+  .page {
+    padding: 12px;
+  }
+
+  .main {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .boardSection {
+    order: 1;
+  }
+
+  .sidebar {
+    order: 2;
+  }
+
+  .header h1 {
+    font-size: 26px;
+  }
+
+  .boardCanvas {
+    width: min(100%, 60dvh);
+    max-height: min(100%, 60dvh);
+  }
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding-bottom: 214px;
+  }
+
+  .header p {
+    font-size: 14px;
+  }
+
+  .main {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .sidebar {
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .paletteGrid {
+    grid-template-columns: repeat(10, 1fr);
+    gap: 4px;
+  }
+
+  .paletteSwatch {
+    border-radius: 4px;
+  }
+
+  .paletteCard {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: 104px;
+    z-index: 19;
+  }
+
+  .selectionCard {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    z-index: 20;
+    border-color: #37485f;
+    background: #111922;
+  }
+
+  .selectionCard h2 {
+    margin-bottom: 4px;
+  }
+
+  .boardCanvas {
+    width: min(100%, 56dvh);
+    max-height: min(100%, 56dvh);
+  }
+}
