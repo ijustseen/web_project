@@ -1,11 +1,30 @@
 import { NextResponse } from "next/server";
 
 import { BOARD_SIZE } from "@/services/pixel/constants";
-import { getBoardSnapshotShared } from "@/services/pixel/store-shared";
+import {
+  getBoardSnapshotShared,
+  SharedStoreUnavailableError,
+} from "@/services/pixel/store-shared";
 import { PIXEL_PALETTE } from "@/types/pixel";
 
 export async function GET() {
-  const snapshot = await getBoardSnapshotShared();
+  let snapshot;
+
+  try {
+    snapshot = await getBoardSnapshotShared();
+  } catch (error) {
+    if (error instanceof SharedStoreUnavailableError) {
+      return NextResponse.json(
+        {
+          code: "STORE_UNAVAILABLE",
+          message: "Shared store is temporarily unavailable.",
+        },
+        { status: 503 },
+      );
+    }
+
+    throw error;
+  }
 
   return NextResponse.json(
     {

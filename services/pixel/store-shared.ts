@@ -44,6 +44,13 @@ type LocalSharedState = {
   cooldown: Record<string, number>;
 };
 
+export class SharedStoreUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SharedStoreUnavailableError";
+  }
+}
+
 function isPixelColor(value: string): value is PixelColor {
   return PIXEL_PALETTE.includes(value as PixelColor);
 }
@@ -238,7 +245,7 @@ export async function applyPlacementShared(
 
   const redis = getRedisClient();
   if (!redis) {
-    return applyPlacementLocalShared(input, nowMs);
+    throw new SharedStoreUnavailableError("Redis client is unavailable");
   }
 
   try {
@@ -277,7 +284,7 @@ export async function applyPlacementShared(
       nextAvailableAt,
     };
   } catch {
-    return applyPlacementLocalShared(input, nowMs);
+    throw new SharedStoreUnavailableError("Redis placement write failed");
   }
 }
 
@@ -288,7 +295,7 @@ export async function getBoardSnapshotShared(): Promise<StoredPixel[]> {
 
   const redis = getRedisClient();
   if (!redis) {
-    return getBoardSnapshotLocalShared();
+    throw new SharedStoreUnavailableError("Redis client is unavailable");
   }
 
   try {
@@ -314,7 +321,7 @@ export async function getBoardSnapshotShared(): Promise<StoredPixel[]> {
 
     return result;
   } catch {
-    return getBoardSnapshotLocalShared();
+    throw new SharedStoreUnavailableError("Redis board read failed");
   }
 }
 
@@ -326,13 +333,12 @@ export async function resetBoardToWhiteShared(): Promise<void> {
 
   const redis = getRedisClient();
   if (!redis) {
-    await resetBoardToWhiteLocalShared();
-    return;
+    throw new SharedStoreUnavailableError("Redis client is unavailable");
   }
 
   try {
     await redis.del(REDIS_BOARD_KEY);
   } catch {
-    await resetBoardToWhiteLocalShared();
+    throw new SharedStoreUnavailableError("Redis board reset failed");
   }
 }

@@ -150,6 +150,32 @@
   border-radius: 16px;
   border: 1px solid #253243;
   background: #121922;
+  position: relative;
+}
+
+.boardSectionDisabled {
+  opacity: 0.72;
+}
+
+.boardSectionDisabled .boardCanvas {
+  pointer-events: none;
+}
+
+.boardDisabledOverlay {
+  position: absolute;
+  inset: 12px;
+  border-radius: 12px;
+  border: 1px solid #5a3840;
+  background: rgb(19 14 16 / 82%);
+  color: #ffd6db;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 2;
 }
 
 .zoomSliderWrap {

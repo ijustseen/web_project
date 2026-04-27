@@ -142,6 +142,7 @@ export default function Home() {
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [isPlacing, setIsPlacing] = useState(false);
   const [isLoadingBoard, setIsLoadingBoard] = useState(true);
+  const [isMapDisabled, setIsMapDisabled] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Loading board...");
   const [realtimeStatus, setRealtimeStatus] =
@@ -187,6 +188,17 @@ export default function Home() {
           cache: "no-store",
         });
 
+        if (response.status === 503) {
+          setIsMapDisabled(true);
+          setRealtimeStatus("disconnected");
+
+          if (!silent) {
+            setStatusMessage("Map is disabled: no connection to shared store.");
+          }
+
+          return;
+        }
+
         if (!response.ok) {
           throw new Error("Unable to load board");
         }
@@ -197,6 +209,7 @@ export default function Home() {
         }
 
         updateBoard(payload.pixels);
+        setIsMapDisabled(false);
         if (!silent) {
           setStatusMessage("Board synchronized.");
         }
@@ -213,13 +226,14 @@ export default function Home() {
 
   const disablePlaceAction = useMemo(
     () =>
+      isMapDisabled ||
       isLoadingBoard ||
       isPlaceActionDisabled(
         cooldownRemaining,
         Boolean(selectedCell),
         isPlacing,
       ),
-    [cooldownRemaining, isLoadingBoard, selectedCell, isPlacing],
+    [cooldownRemaining, isMapDisabled, isLoadingBoard, selectedCell, isPlacing],
   );
 
   useEffect(() => {
@@ -421,7 +435,7 @@ export default function Home() {
       return;
     }
 
-    if (isLoadingBoard) {
+    if (isLoadingBoard || isMapDisabled) {
       return;
     }
 
@@ -435,7 +449,7 @@ export default function Home() {
   };
 
   const handlePlacePixel = async () => {
-    if (!selectedCell || disablePlaceAction) {
+    if (!selectedCell || disablePlaceAction || isMapDisabled) {
       return;
     }
 
@@ -474,6 +488,17 @@ export default function Home() {
         setStatusMessage(
           `Rate limited: retry in ${placeResult.retryAfterSeconds}s`,
         );
+        return;
+      }
+
+      if (
+        !response.ok &&
+        !placeResult.ok &&
+        placeResult.code === "STORE_UNAVAILABLE"
+      ) {
+        setIsMapDisabled(true);
+        setRealtimeStatus("disconnected");
+        setStatusMessage("Map is disabled: no connection to shared store.");
         return;
       }
 
@@ -522,12 +547,20 @@ export default function Home() {
   };
 
   const handleDragStart = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isMapDisabled) {
+      return;
+    }
+
     dragRef.current = { x: event.clientX, y: event.clientY };
     dragMovedRef.current = false;
     setIsDragging(true);
   };
 
   const handleDragMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isMapDisabled) {
+      return;
+    }
+
     const hovered = readCellFromPointer(event);
     setHoveredCell(hovered);
 
@@ -563,6 +596,10 @@ export default function Home() {
   };
 
   const handleTouchStart = (event: React.TouchEvent<HTMLCanvasElement>) => {
+    if (isMapDisabled) {
+      return;
+    }
+
     if (event.touches.length !== 1) {
       return;
     }
@@ -573,6 +610,10 @@ export default function Home() {
   };
 
   const handleTouchMove = (event: React.TouchEvent<HTMLCanvasElement>) => {
+    if (isMapDisabled) {
+      return;
+    }
+
     if (!touchDragRef.current || event.touches.length !== 1) {
       return;
     }
@@ -608,6 +649,10 @@ export default function Home() {
   };
 
   const handleCanvasWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
+    if (isMapDisabled) {
+      return;
+    }
+
     event.preventDefault();
 
     const rect = event.currentTarget.getBoundingClientRect();
@@ -713,7 +758,14 @@ export default function Home() {
           </section>
         </aside>
 
-        <section className={styles.boardSection}>
+        <section
+          className={`${styles.boardSection} ${isMapDisabled ? styles.boardSectionDisabled : ""}`}
+        >
+          {isMapDisabled ? (
+            <div className={styles.boardDisabledOverlay}>
+              Shared store unavailable. Map is temporarily disabled.
+            </div>
+          ) : null}
           <div className={styles.zoomSliderWrap}>
             <label htmlFor="zoom-slider">Zoom</label>
             <input
@@ -723,6 +775,7 @@ export default function Home() {
               max={MAX_ZOOM}
               step={0.1}
               value={viewState.zoom}
+              disabled={isMapDisabled}
               onChange={(event) =>
                 handleZoomSliderChange(Number(event.target.value))
               }

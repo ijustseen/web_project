@@ -7,7 +7,10 @@ import {
 import { logPlacementEvent } from "@/services/pixel/logging";
 import { checkPlacementRateLimit } from "@/services/pixel/rate-limit";
 import { publishRealtimeEvent } from "@/services/pixel/realtime";
-import { applyPlacementShared } from "@/services/pixel/store-shared";
+import {
+  applyPlacementShared,
+  SharedStoreUnavailableError,
+} from "@/services/pixel/store-shared";
 import {
   validateColor,
   validateCoordinates,
@@ -117,12 +120,41 @@ export async function POST(request: Request) {
     return NextResponse.json(color, { status: 400 });
   }
 
-  const result = await applyPlacementShared({
-    playerId,
-    x: coordinates.value.x,
-    y: coordinates.value.y,
-    color: color.value,
-  });
+  let result;
+
+  try {
+    result = await applyPlacementShared({
+      playerId,
+      x: coordinates.value.x,
+      y: coordinates.value.y,
+      color: color.value,
+    });
+  } catch (error) {
+    if (error instanceof SharedStoreUnavailableError) {
+      logPlacementEvent({
+        event: "pixel_placement",
+        timestamp: Date.now(),
+        playerId,
+        ipAddress,
+        status: 503,
+        result: "store_unavailable",
+        x: coordinates.value.x,
+        y: coordinates.value.y,
+        color: color.value,
+        details: "shared store unavailable",
+      });
+
+      return NextResponse.json(
+        {
+          code: "STORE_UNAVAILABLE",
+          message: "Shared store is temporarily unavailable.",
+        },
+        { status: 503 },
+      );
+    }
+
+    throw error;
+  }
 
   if (!result.ok && result.code === "COOLDOWN") {
     logPlacementEvent({
