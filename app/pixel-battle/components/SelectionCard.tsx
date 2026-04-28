@@ -1,13 +1,9 @@
 "use client";
 
 import { PIXEL_PALETTE, type PixelColor } from "@/types/pixel";
+import type { SelectedCell } from "@/types/pixel-battle";
 
 import styles from "@/app/page.module.scss";
-
-type SelectedCell = {
-  x: number;
-  y: number;
-};
 
 type Props = {
   isOnline: boolean;

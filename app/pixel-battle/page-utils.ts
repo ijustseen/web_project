@@ -1,20 +1,9 @@
 "use client";
 
 import { BOARD_SIZE } from "@/services/pixel/constants";
+import type { PlaceResponse, ViewState } from "@/types/pixel-battle";
 
 export const CANVAS_VIEW_SIZE = 512;
-
-export type ViewState = {
-  zoom: number;
-  panX: number;
-  panY: number;
-};
-
-export type PlaceResponse =
-  | { ok: true; nextAvailableAt: number }
-  | { ok: false; code: "COOLDOWN"; remainingSeconds: number }
-  | { ok: false; code: "RATE_LIMITED"; retryAfterSeconds: number }
-  | { ok: false; code: string; message?: string };
 
 export function isCooldownResponse(
   value: PlaceResponse,

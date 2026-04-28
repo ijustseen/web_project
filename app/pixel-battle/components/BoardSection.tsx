@@ -3,14 +3,9 @@
 import type React from "react";
 
 import { CANVAS_VIEW_SIZE } from "../page-utils";
+import type { ViewState } from "@/types/pixel-battle";
 
 import styles from "@/app/page.module.scss";
-
-type ViewState = {
-  zoom: number;
-  panX: number;
-  panY: number;
-};
 
 type Props = {
   isMapDisabled: boolean;

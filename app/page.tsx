@@ -15,9 +15,8 @@ import {
   isRecord,
   readJsonSafely,
   toRgb,
-  type PlaceResponse,
-  type ViewState,
 } from "./pixel-battle/page-utils";
+import type { PlaceResponse, ViewState } from "@/types/pixel-battle";
 import {
   createBoardState,
   getCellIndex,
