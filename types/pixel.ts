@@ -14,6 +14,12 @@ export const PIXEL_PALETTE = [
 
 export type PixelColor = (typeof PIXEL_PALETTE)[number];
 
+export type StoredPixel = {
+  x: number;
+  y: number;
+  color: PixelColor;
+};
+
 export type PlacePixelRequest = {
   playerId: string;
   x: number;

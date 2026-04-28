@@ -52,16 +52,15 @@ export async function publishRealtimeEvent(
   await initializeRedisSubscription();
 
   const redis = getRedisClient();
-  if (redis) {
-    try {
-      await redis.publish(REDIS_REALTIME_CHANNEL, JSON.stringify(event));
-      return;
-    } catch {
-      // If Redis publish fails, fallback to local process broadcast.
-    }
+  if (!redis) {
+    return;
   }
 
-  broadcastLocalEvent(event);
+  try {
+    await redis.publish(REDIS_REALTIME_CHANNEL, JSON.stringify(event));
+  } catch {
+    // Ignore publish errors; client snapshot sync will eventually reconcile state.
+  }
 }
 
 function broadcastLocalEvent(

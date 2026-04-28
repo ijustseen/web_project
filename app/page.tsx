@@ -6,15 +6,31 @@ import { BOARD_SIZE } from "@/services/pixel/constants";
 import { PIXEL_PALETTE, type PixelColor } from "@/types/pixel";
 
 import {
+  CANVAS_VIEW_SIZE,
+  clampViewState,
+  getCanvasScale,
+  getOrCreatePlayerId,
+  isCooldownResponse,
+  isRateLimitedResponse,
+  isRecord,
+  readJsonSafely,
+  toRgb,
+  type PlaceResponse,
+  type ViewState,
+} from "./pixel-battle/page-utils";
+import {
   createBoardState,
   getCellIndex,
   isPlaceActionDisabled,
 } from "./pixel-battle/ui-state";
+import { BoardSection } from "./pixel-battle/components/BoardSection";
+import { InfoCard } from "./pixel-battle/components/InfoCard";
+import { PaletteCard } from "./pixel-battle/components/PaletteCard";
+import { SelectionCard } from "./pixel-battle/components/SelectionCard";
 import styles from "./page.module.scss";
 
 const DEFAULT_CELL_COLOR = "#ffffff";
 const PLAYER_ID_STORAGE_KEY = "pixel-battle-player-id";
-const CANVAS_VIEW_SIZE = 512;
 const MIN_ZOOM = CANVAS_VIEW_SIZE / BOARD_SIZE;
 const INITIAL_ZOOM = MIN_ZOOM;
 const MAX_ZOOM = 16;
@@ -24,103 +40,6 @@ type SelectedCell = {
   x: number;
   y: number;
 };
-
-type ViewState = {
-  zoom: number;
-  panX: number;
-  panY: number;
-};
-
-type RealtimeStatus = "connecting" | "connected" | "disconnected";
-
-type PanBounds = {
-  minPanX: number;
-  maxPanX: number;
-  minPanY: number;
-  maxPanY: number;
-};
-
-type PlaceResponse =
-  | { ok: true; nextAvailableAt: number }
-  | { ok: false; code: "COOLDOWN"; remainingSeconds: number }
-  | { ok: false; code: "RATE_LIMITED"; retryAfterSeconds: number }
-  | { ok: false; code: string; message?: string };
-
-function isCooldownResponse(
-  value: PlaceResponse,
-): value is { ok: false; code: "COOLDOWN"; remainingSeconds: number } {
-  return (
-    !value.ok &&
-    value.code === "COOLDOWN" &&
-    "remainingSeconds" in value &&
-    typeof value.remainingSeconds === "number"
-  );
-}
-
-function isRateLimitedResponse(
-  value: PlaceResponse,
-): value is { ok: false; code: "RATE_LIMITED"; retryAfterSeconds: number } {
-  return (
-    !value.ok &&
-    value.code === "RATE_LIMITED" &&
-    "retryAfterSeconds" in value &&
-    typeof value.retryAfterSeconds === "number"
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function toRgb(hexColor: string): [number, number, number] {
-  const clean = hexColor.startsWith("#") ? hexColor.slice(1) : hexColor;
-  if (!/^[0-9a-fA-F]{6}$/.test(clean)) {
-    return [255, 255, 255];
-  }
-
-  return [
-    Number.parseInt(clean.slice(0, 2), 16),
-    Number.parseInt(clean.slice(2, 4), 16),
-    Number.parseInt(clean.slice(4, 6), 16),
-  ];
-}
-
-function getOrCreatePlayerId(): string {
-  const persisted = window.localStorage.getItem(PLAYER_ID_STORAGE_KEY);
-  if (persisted && /^[a-zA-Z0-9_-]{3,64}$/.test(persisted)) {
-    return persisted;
-  }
-
-  const generated =
-    typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID().replaceAll("-", "")
-      : `player-${Date.now()}`;
-
-  window.localStorage.setItem(PLAYER_ID_STORAGE_KEY, generated);
-  return generated;
-}
-
-function getPanBounds(zoom: number): PanBounds {
-  const renderedSize = BOARD_SIZE * zoom;
-  const minPan = CANVAS_VIEW_SIZE - renderedSize;
-
-  return {
-    minPanX: minPan,
-    maxPanX: 0,
-    minPanY: minPan,
-    maxPanY: 0,
-  };
-}
-
-function clampViewState(viewState: ViewState): ViewState {
-  const bounds = getPanBounds(viewState.zoom);
-
-  return {
-    ...viewState,
-    panX: Math.min(bounds.maxPanX, Math.max(bounds.minPanX, viewState.panX)),
-    panY: Math.min(bounds.maxPanY, Math.max(bounds.minPanY, viewState.panY)),
-  };
-}
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -144,14 +63,22 @@ export default function Home() {
   const [isLoadingBoard, setIsLoadingBoard] = useState(true);
   const [isMapDisabled, setIsMapDisabled] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("Loading board...");
-  const [realtimeStatus, setRealtimeStatus] =
-    useState<RealtimeStatus>("connecting");
+  const [isOnline, setIsOnline] = useState(false);
   const [viewState, setViewState] = useState<ViewState>({
     zoom: INITIAL_ZOOM,
     panX: 0,
     panY: 0,
   });
+
+  const addPanDelta = useCallback((deltaX: number, deltaY: number) => {
+    setViewState((previous) =>
+      clampViewState({
+        ...previous,
+        panX: previous.panX + deltaX,
+        panY: previous.panY + deltaY,
+      }),
+    );
+  }, []);
 
   const updateBoard = useCallback((pixels: unknown[]) => {
     const nextBoard = createBoardState(BOARD_SIZE, DEFAULT_CELL_COLOR);
@@ -181,48 +108,37 @@ export default function Home() {
     setBoard(nextBoard);
   }, []);
 
-  const loadBoard = useCallback(
-    async (silent: boolean = false) => {
-      try {
-        const response = await fetch("/api/pixels/board", {
-          cache: "no-store",
-        });
+  const loadBoard = useCallback(async () => {
+    try {
+      const response = await fetch("/api/pixels/board", {
+        cache: "no-store",
+      });
 
-        if (response.status === 503) {
-          setIsMapDisabled(true);
-          setRealtimeStatus("disconnected");
+      if (response.status === 503) {
+        setIsMapDisabled(true);
+        setIsOnline(false);
 
-          if (!silent) {
-            setStatusMessage("Map is disabled: no connection to shared store.");
-          }
-
-          return;
-        }
-
-        if (!response.ok) {
-          throw new Error("Unable to load board");
-        }
-
-        const payload: unknown = await response.json();
-        if (!isRecord(payload) || !Array.isArray(payload.pixels)) {
-          throw new Error("Invalid board payload");
-        }
-
-        updateBoard(payload.pixels);
-        setIsMapDisabled(false);
-        if (!silent) {
-          setStatusMessage("Board synchronized.");
-        }
-      } catch {
-        if (!silent) {
-          setStatusMessage("Board loading failed. Try again.");
-        }
-      } finally {
-        setIsLoadingBoard(false);
+        return;
       }
-    },
-    [updateBoard],
-  );
+
+      if (!response.ok) {
+        throw new Error("Unable to load board");
+      }
+
+      const payload: unknown = await response.json();
+      if (!isRecord(payload) || !Array.isArray(payload.pixels)) {
+        throw new Error("Invalid board payload");
+      }
+
+      updateBoard(payload.pixels);
+      setIsMapDisabled(false);
+      setIsOnline(true);
+    } catch {
+      setIsOnline(false);
+    } finally {
+      setIsLoadingBoard(false);
+    }
+  }, [updateBoard]);
 
   const disablePlaceAction = useMemo(
     () =>
@@ -237,10 +153,10 @@ export default function Home() {
   );
 
   useEffect(() => {
-    playerIdRef.current = getOrCreatePlayerId();
+    playerIdRef.current = getOrCreatePlayerId(PLAYER_ID_STORAGE_KEY);
 
     const timerId = window.setTimeout(() => {
-      void loadBoard(false);
+      void loadBoard();
     }, 0);
 
     return () => {
@@ -250,7 +166,7 @@ export default function Home() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      void loadBoard(true);
+      void loadBoard();
     }, 1500);
 
     return () => {
@@ -281,8 +197,7 @@ export default function Home() {
     const eventSource = new EventSource("/api/pixels/stream");
 
     eventSource.onopen = () => {
-      setRealtimeStatus("connected");
-      void loadBoard(true);
+      void loadBoard();
     };
 
     eventSource.onmessage = (event) => {
@@ -324,12 +239,11 @@ export default function Home() {
 
       if (payload.type === "reset") {
         setBoard(createBoardState(BOARD_SIZE, DEFAULT_CELL_COLOR));
-        setStatusMessage("Board was reset to white.");
       }
     };
 
     eventSource.onerror = () => {
-      setRealtimeStatus("disconnected");
+      setIsOnline(false);
     };
 
     return () => {
@@ -445,7 +359,6 @@ export default function Home() {
     }
 
     setSelectedCell(nextCell);
-    setStatusMessage(`Selected cell ${nextCell.x}:${nextCell.y}`);
   };
 
   const handlePlacePixel = async () => {
@@ -469,9 +382,8 @@ export default function Home() {
         }),
       });
 
-      const payload: unknown = await response.json();
+      const payload = await readJsonSafely(response);
       if (!isRecord(payload)) {
-        setStatusMessage("Unexpected server response.");
         return;
       }
 
@@ -480,14 +392,10 @@ export default function Home() {
       if (response.status === 429 && isCooldownResponse(placeResult)) {
         const nextTime = Date.now() + placeResult.remainingSeconds * 1000;
         setCooldownUntil(nextTime);
-        setStatusMessage(`Cooldown: ${placeResult.remainingSeconds}s`);
         return;
       }
 
       if (response.status === 429 && isRateLimitedResponse(placeResult)) {
-        setStatusMessage(
-          `Rate limited: retry in ${placeResult.retryAfterSeconds}s`,
-        );
         return;
       }
 
@@ -497,20 +405,11 @@ export default function Home() {
         placeResult.code === "STORE_UNAVAILABLE"
       ) {
         setIsMapDisabled(true);
-        setRealtimeStatus("disconnected");
-        setStatusMessage("Map is disabled: no connection to shared store.");
+        setIsOnline(false);
         return;
       }
 
       if (!response.ok || !placeResult.ok) {
-        const message =
-          !placeResult.ok &&
-          "message" in placeResult &&
-          typeof placeResult.message === "string"
-            ? placeResult.message
-            : "Placement rejected.";
-
-        setStatusMessage(message);
         return;
       }
 
@@ -521,11 +420,6 @@ export default function Home() {
           selectedColor;
         return next;
       });
-      setStatusMessage(
-        `Placed ${selectedColor} at ${selectedCell.x}:${selectedCell.y}`,
-      );
-    } catch {
-      setStatusMessage("Network error while placing pixel.");
     } finally {
       setIsPlacing(false);
     }
@@ -568,9 +462,7 @@ export default function Home() {
       return;
     }
 
-    const canvas = event.currentTarget;
-    const rect = canvas.getBoundingClientRect();
-    const scale = CANVAS_VIEW_SIZE / rect.width;
+    const scale = getCanvasScale(event.currentTarget);
 
     const deltaX = (event.clientX - dragRef.current.x) * scale;
     const deltaY = (event.clientY - dragRef.current.y) * scale;
@@ -581,13 +473,7 @@ export default function Home() {
 
     dragRef.current = { x: event.clientX, y: event.clientY };
 
-    setViewState((previous) =>
-      clampViewState({
-        ...previous,
-        panX: previous.panX + deltaX,
-        panY: previous.panY + deltaY,
-      }),
-    );
+    addPanDelta(deltaX, deltaY);
   };
 
   const handleDragEnd = () => {
@@ -621,21 +507,14 @@ export default function Home() {
     event.preventDefault();
 
     const touch = event.touches[0];
-    const rect = event.currentTarget.getBoundingClientRect();
-    const scale = CANVAS_VIEW_SIZE / rect.width;
+    const scale = getCanvasScale(event.currentTarget);
 
     const deltaX = (touch.clientX - touchDragRef.current.x) * scale;
     const deltaY = (touch.clientY - touchDragRef.current.y) * scale;
 
     touchDragRef.current = { x: touch.clientX, y: touch.clientY };
 
-    setViewState((previous) =>
-      clampViewState({
-        ...previous,
-        panX: previous.panX + deltaX,
-        panY: previous.panY + deltaY,
-      }),
-    );
+    addPanDelta(deltaX, deltaY);
   };
 
   const handleTouchEnd = () => {
@@ -686,127 +565,41 @@ export default function Home() {
     <div className={styles.page}>
       <main className={styles.main}>
         <aside className={styles.sidebar}>
-          <section className={`${styles.sectionCard} ${styles.infoCard}`}>
-            <h1>
-              Pixel Battle {BOARD_SIZE}x{BOARD_SIZE}
-            </h1>
-            <p>Global board, one pixel every 5 seconds.</p>
-          </section>
-
-          <section className={`${styles.sectionCard} ${styles.paletteCard}`}>
-            <h2>Palette</h2>
-            <div className={styles.paletteGrid}>
-              {PIXEL_PALETTE.map((color) => {
-                const isSelected = color === selectedColor;
-
-                return (
-                  <button
-                    key={color}
-                    type="button"
-                    className={styles.paletteSwatch}
-                    style={{ backgroundColor: color }}
-                    data-selected={isSelected}
-                    onClick={() => setSelectedColor(color)}
-                    aria-label={`Select color ${color}`}
-                  />
-                );
-              })}
-            </div>
-          </section>
-
-          <section className={`${styles.sectionCard} ${styles.selectionCard}`}>
-            <div className={styles.selectionHeader}>
-              <h2>Selection</h2>
-              <span className={styles.liveBadge} data-state={realtimeStatus}>
-                {realtimeStatus}
-              </span>
-            </div>
-            <div className={styles.mobilePalette}>
-              {PIXEL_PALETTE.map((color) => {
-                const isSelected = color === selectedColor;
-
-                return (
-                  <button
-                    key={`mobile-${color}`}
-                    type="button"
-                    className={styles.paletteSwatch}
-                    style={{ backgroundColor: color }}
-                    data-selected={isSelected}
-                    onClick={() => setSelectedColor(color)}
-                    aria-label={`Select color ${color}`}
-                  />
-                );
-              })}
-            </div>
-            <p>
-              {selectedCell
-                ? `X: ${selectedCell.x}, Y: ${selectedCell.y}`
-                : "Click board to choose a cell"}
-            </p>
-            <p>
-              Cooldown:{" "}
-              {cooldownRemaining > 0 ? `${cooldownRemaining}s` : "Ready"}
-            </p>
-            <button
-              type="button"
-              className={styles.placeButton}
-              onClick={handlePlacePixel}
-              disabled={disablePlaceAction}
-            >
-              {isPlacing ? "Placing..." : "Place pixel"}
-            </button>
-            <p className={styles.statusMessage} aria-live="polite">
-              {statusMessage}
-            </p>
-          </section>
+          <InfoCard />
+          <PaletteCard
+            selectedColor={selectedColor}
+            onSelectColor={setSelectedColor}
+          />
+          <SelectionCard
+            isOnline={isOnline}
+            selectedCell={selectedCell}
+            selectedColor={selectedColor}
+            cooldownRemaining={cooldownRemaining}
+            isPlacing={isPlacing}
+            disablePlaceAction={disablePlaceAction}
+            onSelectColor={setSelectedColor}
+            onPlace={handlePlacePixel}
+          />
         </aside>
 
-        <section
-          className={`${styles.boardSection} ${isMapDisabled ? styles.boardSectionDisabled : ""}`}
-        >
-          {isMapDisabled ? (
-            <div className={styles.boardDisabledOverlay}>
-              Shared store unavailable. Map is temporarily disabled.
-            </div>
-          ) : null}
-          <div className={styles.zoomSliderWrap}>
-            <label htmlFor="zoom-slider">Zoom</label>
-            <input
-              id="zoom-slider"
-              type="range"
-              min={MIN_ZOOM}
-              max={MAX_ZOOM}
-              step={0.1}
-              value={viewState.zoom}
-              disabled={isMapDisabled}
-              onChange={(event) =>
-                handleZoomSliderChange(Number(event.target.value))
-              }
-            />
-          </div>
-          <canvas
-            ref={canvasRef}
-            width={CANVAS_VIEW_SIZE}
-            height={CANVAS_VIEW_SIZE}
-            className={`${styles.boardCanvas} ${isDragging ? styles.dragging : ""}`}
-            onClick={handleCanvasClick}
-            onWheel={handleCanvasWheel}
-            onMouseDown={handleDragStart}
-            onMouseMove={handleDragMove}
-            onMouseUp={handleDragEnd}
-            onMouseLeave={handleCanvasLeave}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            onTouchCancel={handleTouchEnd}
-            aria-label="Pixel battle board"
-            role="img"
-          />
-          <p className={styles.boardHint}>
-            Tap to select. Drag with mouse to move camera. Use zoom slider or
-            mouse wheel.
-          </p>
-        </section>
+        <BoardSection
+          isMapDisabled={isMapDisabled}
+          isDragging={isDragging}
+          viewState={viewState}
+          minZoom={MIN_ZOOM}
+          maxZoom={MAX_ZOOM}
+          onZoomChange={handleZoomSliderChange}
+          canvasRef={canvasRef}
+          onCanvasClick={handleCanvasClick}
+          onCanvasWheel={handleCanvasWheel}
+          onMouseDown={handleDragStart}
+          onMouseMove={handleDragMove}
+          onMouseUp={handleDragEnd}
+          onMouseLeave={handleCanvasLeave}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        />
       </main>
     </div>
   );

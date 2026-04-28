@@ -11,8 +11,7 @@ type BucketResult = {
   retryAfterSeconds: number;
 };
 
-const playerBuckets = new Map<string, Bucket>();
-const ipBuckets = new Map<string, Bucket>();
+const buckets = new Map<string, Bucket>();
 
 export type RateLimitResult =
   | { allowed: true }
@@ -28,8 +27,8 @@ export function checkPlacementRateLimit(
   ipAddress: string,
   nowMs: number = Date.now(),
 ): RateLimitResult {
-  const playerResult = consumeBucket(playerBuckets, playerId, nowMs);
-  const ipResult = consumeBucket(ipBuckets, ipAddress, nowMs);
+  const playerResult = consumeBucket(`player:${playerId}`, nowMs);
+  const ipResult = consumeBucket(`ip:${ipAddress}`, nowMs);
 
   if (playerResult.allowed && ipResult.allowed) {
     return { allowed: true };
@@ -47,15 +46,10 @@ export function checkPlacementRateLimit(
 }
 
 export function resetPlacementRateLimitStore(): void {
-  playerBuckets.clear();
-  ipBuckets.clear();
+  buckets.clear();
 }
 
-function consumeBucket(
-  buckets: Map<string, Bucket>,
-  key: string,
-  nowMs: number,
-): BucketResult {
+function consumeBucket(key: string, nowMs: number): BucketResult {
   const current = buckets.get(key);
   if (!current || nowMs - current.windowStartedAt >= RATE_LIMIT_WINDOW_MS) {
     buckets.set(key, {

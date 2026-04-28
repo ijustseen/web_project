@@ -41,9 +41,7 @@ export async function GET(request: Request) {
           cleanup();
           try {
             controller.close();
-          } catch {
-            // Stream can already be closed by the runtime.
-          }
+          } catch {}
         },
         { once: true },
       );
